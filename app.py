@@ -624,6 +624,20 @@ k5.metric(
     f"Média: {melhor_tempo_cenario:.1f} min",
 )
 
+with st.expander("Guia rápido da tela e parâmetros (apoio à apresentação)", expanded=False):
+    st.markdown(
+        r"""
+- **De onde vêm os 3 dias do Tempo de Reposição?** O arquivo original só registra o tempo da entrega ao cliente (em minutos) — ele não informa o prazo que um fornecedor demora para reabastecer o galpão. Por isso, **3 dias** é uma hipótese padrão ajustável na barra lateral (de 1 a 30 dias) para simular o fornecedor.
+- **O que significam os 5 cartões acima?**
+  1. **Demanda Média Diária:** quantos pedidos saem por dia desse produto (e quanto varia para mais ou para menos).
+  2. **Equação da Demanda:** reta que mostra se as vendas estão subindo ou caindo ao longo dos 44 dias.
+  3. **Tempo Médio (Cenário):** média em minutos das entregas no clima e trânsito filtrados.
+  4. **Ponto de Reposição (PR):** nível mínimo no estoque que dispara o alerta de compra ("quando bater esse valor, peça mais") já contando a **Reserva de Segurança (ES)**.
+  5. **Veículo no Cenário:** modal com menor tempo médio dentro dos filtros escolhidos.
+- **Dois modelos na barra lateral:** **Reserva de Segurança (%)** aplica uma margem percentual fixa sobre o estoque básico (regra do trabalho escrito); **Nível de Serviço (Estatístico)** calcula a folga pela variação real das vendas ($\sigma_d$) para garantir 90% a 99% de chance de não faltar produto.
+        """
+    )
+
 st.divider()
 
 aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs([
@@ -645,6 +659,18 @@ with aba1:
         "com padronização textual, classificação de valores ausentes como `Não Informado`, mediana `4,7` nas notas, "
         "correção de sinal das coordenadas GPS e cálculo da distância pela fórmula de Haversine."
     )
+
+    with st.expander("Explicação simples desta etapa (o que foi limpo e por quê)"):
+        st.markdown(
+            """
+- **Por que limpar sem apagar nenhuma linha?** Se apagássemos os pedidos com algum campo vazio, ia parecer que a loja vendeu menos naquele dia, distorcendo o cálculo de estoque.
+- **Padronização de texto:** removemos espaços escondidos no fim das palavras e corrigimos erros de digitação do arquivo bruto (ex.: `Metropolitian` virou `Metropolitan`).
+- **Dados ausentes (`91` registros):** onde faltava clima, trânsito ou horário do pedido, preservamos a venda classificando como `Não Informado` (e usando o horário de coleta para o horário do pedido).
+- **Mediana nas notas (`54` avaliações vazias):** preenchemos com `4,7` (o valor do meio da base), pois a mediana não se distorce caso existam algumas notas muito baixas isoladas.
+- **Geolocalização e Haversine (`188` coordenadas):** corrigimos o sinal negativo errado da latitude da loja e calculamos a distância real em km entre loja e cliente pela curvatura da Terra (média de ~10,1 km entre categorias).
+- **As 3 tabelas prontas:** **Tabela 1** (todos os 43.739 pedidos limpos), **Tabela 2** (demanda agregada por dia e categoria = 704 linhas) e **Tabela 3** (resumo das 16 categorias).
+            """
+        )
 
     col_d1, col_d2 = st.columns(2)
     with col_d1:
@@ -690,11 +716,12 @@ with aba2:
 
     with st.expander("O que esta aba analisa e por quê"):
         st.markdown(
-            """
-- **Analisa:** se a demanda diária de cada produto cresce, cai ou permanece estável ao longo do período, e quanto cada km adicional acrescenta ao tempo de entrega.
-- **Modelo:** regressão linear simples $y = a \\cdot x + b$ ajustada por mínimos quadrados (`scipy.stats.linregress`).
-- **Como ler:** $R^2$ indica quanto da variação é explicada pela reta (fraco $< 0{,}30$); $p$-valor $< 0{,}05$ indica tendência estatisticamente significativa.
-- **Cuidado:** significância estatística não implica causalidade, e sazonalidade semanal não é modelada explicitamente.
+            r"""
+- **Diagrama de Dispersão e Regressão Linear ($y = a \cdot x + b$):** pegamos os pontos históricos e passamos uma reta no meio pelo método dos mínimos quadrados para ver a tendência geral.
+- **Inclinação ($a$) e Intercepto ($b$):** $a$ mostra quanto muda a cada passo (ex.: pedidos a mais por dia); $b$ é o ponto inicial da reta.
+- **Dia de Operação (`1` a `44`):** entre 11/02 e 06/04 existem 55 dias no calendário, mas só 44 têm registros. Numeramos em sequência (`1` a `44`) para não criar buracos falsos na reta.
+- **Como ler $R^2$ e $p$-valor:** **$R^2$** (de 0 a 100%) mede quanto da variação dos pontos a reta explica — valores abaixo de `0,30` indicam que os pontos oscilam bastante dia a dia e a reta serve como **tendência geral**, não previsão exata. Já **$p$-valor $< 0{,}05$** confirma que a tendência observada é estatisticamente real e não coincidência.
+- **Faixa $\pm 2\sigma$ e Resíduos:** resíduo é a diferença entre o valor real e a reta (`observado - estimado`); a faixa sombreada mostra onde os pontos normalmente variam em volta da reta.
             """
         )
 
@@ -801,10 +828,9 @@ with aba2:
     st.markdown("#### Tempo de Entrega em função da Distância")
     with st.expander("O que esta análise mostra e por quê"):
         st.markdown(
-            """
-- **Analisa:** quantos minutos extras cada quilômetro adicional de distância adiciona ao tempo de entrega.
-- **Modelo:** $Tempo = a \\cdot Distância + b$.
-- **Observação:** $R^2$ moderado/baixo é esperado porque clima, trânsito e tipo de veículo também impactam fortemente a duração da entrega.
+            r"""
+- **O que mede:** quantos minutos extras, em média, cada `1 km` a mais de distância adiciona ao tempo de entrega ($a$ da equação), partindo de um tempo fixo base ($b$).
+- **Por que o $R^2$ é baixo?** Porque a distância sozinha explica apenas uma pequena parte do prazo — **trânsito, clima e tipo de veículo** pesam muito mais no atraso das entregas (como visto na próxima aba).
             """
         )
 
@@ -857,9 +883,9 @@ with aba3:
     with st.expander("O que esta aba analisa e por quê"):
         st.markdown(
             r"""
-- **Analisa:** quanto o tempo médio de entrega piora em cada condição externa comparada ao cenário mais favorável (`Livre` para trânsito e `Ensolarado` para clima).
-- **Métricas:** diferença absoluta em minutos ($\Delta$ min) e relativa ($\Delta$ %), que alimentam o **fator de atraso** do ponto de reposição.
-- **Cuidado:** comparação descritiva — outras variáveis como distância e frota atuam em conjunto.
+- **O que é Análise de Sensibilidade?** Medir o tamanho do impacto quando fatores externos fora do nosso controle (**Clima** e **Trânsito**) mudam.
+- **Baseline e $\Delta$ (Delta):** comparamos todas as situações contra o cenário mais favorável (**Livre** no trânsito e **Ensolarado** no clima), mostrando quantos minutos ($\Delta$ min) e quantos por cento ($\Delta$ %) a entrega piora. Esse atraso percentual alimenta o cálculo do estoque na Aba 3.
+- **Como ler Boxplot e Mapa de Calor:** o **Boxplot** mostra a entrega do meio (mediana), onde se concentra a maioria dos pedidos e os atrasos extremos (*outliers*); o **Mapa de Calor** cruza Clima $\times$ Trânsito e pinta mais forte onde a combinação gera os piores gargalos.
             """
         )
 
@@ -924,10 +950,10 @@ with aba4:
 
     with st.expander("O que esta aba analisa e por quê"):
         st.markdown(
-            """
-- **Analisa:** desempenho médio de cada tipo de veículo nos diferentes níveis de trânsito.
-- **Critério Prescritivo Global:** como a frota atende a todos os cenários operacionais, o critério adequado é o **tempo esperado ponderado** $E[T_v] = \\sum p(c) \\cdot T(v, c)$, ponderado pela frequência real $p(c)$ de cada nível de trânsito.
-- **Rigor amostral:** excluir `Mercado (Perecíveis)` (entregas ultrarrápidas ~5× menores) e células com $n < 30$ (como `Bicicleta`, com apenas 15 registros) evita distorções estatísticas.
+            r"""
+- **Por que excluir `Mercado (Perecíveis)` e `Bicicleta` ($n < 30$)?** `Bicicleta` só possui 15 entregas no arquivo todo (amostra pequena demais para confiar na média), e `Mercado` tem entregas ~5x mais rápidas que distorceriam a média dos outros produtos.
+- **Por que não olhar só um cenário ou média simples?** Embora a `Scooter` vença em trânsito `Livre`, `Médio` e `Alto`, a `Van` é melhor no `Engarrafamento` — que representa mais de 31% das entregas reais.
+- **Tempo Esperado Ponderado ($E[T_v] = \sum p(c) \cdot T(v, c)$):** multiplica o tempo de cada veículo pela frequência real $p(c)$ com que cada trânsito acontece na prática, revelando o veículo realmente mais rápido no dia a dia e estimando quantas **horas-veículo/dia** a operação economiza.
             """
         )
 
@@ -1057,13 +1083,12 @@ with aba5:
     with st.expander("O que esta aba analisa e por quê"):
         st.markdown(
             r"""
-- **Analisa:** em que nível de estoque disparar o pedido de compra para evitar ruptura diante de oscilações da demanda e atrasos logísticos.
-- **Modelo Estatístico (Nível de Serviço $z$):**
-  - $f_{atraso} = \max\left(\frac{\bar{T}_{cenário}}{\bar{T}_{baseline}} - 1,\, 0\right)$ e $L_{ef} = L \cdot (1 + f_{atraso})$
-  - $ES = z \cdot \sigma_d \cdot \sqrt{L_{ef}}$ e $PR = \lceil d \cdot L_{ef} + ES \rceil$
-- **Modelo Percentual (Estoque Básico + Reserva):**
-  - $PR_{pct} = \lceil (d \cdot L) + (d \cdot L) \cdot \text{margem\%} \cdot (\bar{T}_{cenario\_prod} / \bar{T}_{geral\_prod}) \rceil$
-- **Decisão Gerencial:** equilibrar nível de serviço (menor risco de falta) versus capital imobilizado em estoque.
+- **Ideia prática:** em vez de esperar o produto acabar para comprar, calculamos quanto é consumido durante o **Tempo de Reposição ($L$)** e somamos uma **Reserva de Segurança ($ES$)** para não zerar se vender acima da média ou atrasar a entrega.
+- **Fator de Atraso ($f_{atraso}$) e Prazo Efetivo ($L_{ef}$):** compara o cenário escolhido contra o ideal (`Livre + Ensolarado`) e estica o prazo proporcionalmente ($L_{ef} = L \cdot (1 + f_{atraso})$).
+- **Os dois modelos lado a lado:**
+  - **Nível de Serviço (Estatístico):** você escolhe a garantia de não faltar produto (90% a 99% $\rightarrow$ escore $z$) e o cálculo usa o desvio-padrão das vendas ($ES = z \cdot \sigma_d \cdot \sqrt{L_{ef}}$).
+  - **Reserva de Segurança (%):** aplica uma margem percentual fixa sobre o estoque básico ($d \cdot L$) ajustada pelo atraso relativo do produto.
+- **Ponto de Reposição ($PR$) e Trade-off:** $PR$ é o gatilho de compra ("quando atingir $PR$, faça o pedido"). A **Tabela de Trade-off** mostra a troca prática: maior nível de serviço reduz risco de falta, mas exige mais capital parado em estoque.
             """
         )
 
@@ -1099,6 +1124,16 @@ with aba5:
         f"Gatilho ativo: **PR = {ponto_de_pedido} un.** | Estoque inicial: **{max(ponto_de_pedido * 2, lote_reposicao)} un.** | "
         f"Lote de reposição: **+{lote_reposicao} un.** (1,5x a demanda média no prazo)."
     )
+
+    with st.expander("Como ler os gráficos dos 44 dias e os termos da simulação"):
+        st.markdown(
+            """
+- **Linha tracejada laranja (`PR`):** é o alarme de compra — sempre que o saldo encosta ou passa abaixo dela, o sistema dispara um **Lote de Reposição** (`1,5x` a demanda do prazo).
+- **Por que as bolinhas azul-escuro (`Sim`) aparecem lá em cima (~500 un.)?** Porque o gráfico mostra o estoque **no fim do dia**, depois de já ter somado o lote comprado naquele dia.
+- **Gráfico da direita (dente de serra):** mostra a queda diária pelas vendas e a subida na reposição. O trecho reto maior no fim de fevereiro ocorre porque o eixo X usa a data real do calendário e a base original tem um intervalo sem registros entre `18/02` e `01/03`.
+- **Ruptura (`saldo 0`):** significa faltar produto na prateleira — quanto menor esse número, mais seguro está o estoque.
+            """
+        )
 
     col_e1, col_e2 = st.columns(2)
     with col_e1:
@@ -1221,6 +1256,15 @@ with aba6:
         "Verificação formal das hipóteses estatísticas utilizadas nas etapas anteriores. "
         "Identificar desvios de normalidade, autocorrelação ou baixa cobertura amostral garante rigor técnico na interpretação."
     )
+
+    with st.expander("Explicação simples dos diagnósticos e limitações"):
+        st.markdown(
+            r"""
+- **1) Coeficiente de Variação (`CV%`) e Sobredispersão ($\sigma/\sqrt{\mu}$):** `CV%` mostra quais produtos têm vendas mais instáveis (exigem reserva maior); valores de $\sigma/\sqrt{\mu} > 1{,}3$ indicam variabilidade acima do normal de contagens simples.
+- **2) Normalidade (Shapiro-Wilk) e Autocorrelação (`r lag-1`):** testa se as vendas diárias seguem uma curva normal (`p >= 0,05` confirma) e se vender muito num dia puxa o dia seguinte (`|r| >= 0,3`). Quando há autocorrelação forte, a fórmula $\sqrt{L}$ tende a subestimar a reserva necessária.
+- **3, 4 e 5) Cobertura, `"Não Informado"` e Frota:** conferem se existem cruzamentos com menos de 30 entregas, mostram que campos sem informação são apenas `0,21%` em clima e trânsito (baixo viés) e comprovam por que `Bicicleta` (15 pedidos) não entra na decisão de frota.
+            """
+        )
 
     st.markdown("**1) Volatilidade da Demanda por Produto (CV e Sobredispersão)**")
     diag_vol = df_parametros.copy()
